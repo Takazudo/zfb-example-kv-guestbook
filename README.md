@@ -119,3 +119,18 @@ Add these under **Settings → Secrets and variables → Actions**:
 | `CLOUDFLARE_ACCOUNT_ID` | target Cloudflare account id |
 
 Before deploy can run, create the KV namespace and commit its real id into `wrangler.toml` — the deploy job self-skips while the `REPLACE_WITH_KV_NAMESPACE_ID` placeholder remains (see **Provision Cloudflare resources** above). `ADMIN_TOKEN` is a Worker secret set with `wrangler secret put`, not a GitHub secret.
+
+### Cloudflare API token permissions
+
+The `CLOUDFLARE_API_TOKEN` repo secret is an **Account**-scoped custom token
+(Cloudflare dashboard → My Profile → API Tokens → Create Custom Token) with
+these permissions:
+
+- **Workers Scripts** — Edit
+- **Workers KV Storage** — Edit
+- **Account Settings** — Read
+
+Set **Account Resources → Include → (your account)**. No Zone permissions are
+needed — this repo deploys to a `*.workers.dev` host, not a custom domain. A
+single token can be shared across all `zfb-example-*` repos if it carries the
+union of every repo's permissions.
