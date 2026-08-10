@@ -23,6 +23,10 @@ you want a fresh local namespace.
 
 ## Provision Cloudflare resources
 
+For the ordered, from-zero walkthrough — token, GitHub secrets, KV namespace,
+Worker secret, first deploy — see [docs/cloudflare-setup.md](docs/cloudflare-setup.md).
+The sections below stay as per-topic reference.
+
 Create a KV namespace:
 
 ```bash
@@ -103,6 +107,10 @@ response. If `ADMIN_TOKEN` is missing, the delete endpoint returns a clear
 `503`; missing or wrong bearer tokens return `401`.
 
 ## Continuous deployment (GitHub Actions)
+
+Setting this up for the first time? Follow
+[docs/cloudflare-setup.md](docs/cloudflare-setup.md) in order instead of
+assembling the steps from this section.
 
 This repo ships `.github/workflows/deploy.yml`:
 
