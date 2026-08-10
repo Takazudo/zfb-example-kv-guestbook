@@ -3,7 +3,8 @@
 #   build  — always runs (push + PR): install, typecheck (`zfb check`), build
 #            (`zfb build`). This is the L3 build-output gate; it needs no
 #            Cloudflare credentials, so a fresh clone/fork is green immediately.
-#   deploy — push to `main` only: runs `wrangler deploy`, but SELF-SKIPS when
+#   deploy — push to `main` only: runs `wrangler deploy`, then smoke-tests the
+#            live custom domain. Both steps SELF-SKIP when
 #              * secrets.CLOUDFLARE_API_TOKEN is unset, or
 #              * wrangler.toml still holds a REPLACE_WITH_* placeholder id.
 #            So the repo never shows a red deploy before Cloudflare is wired up.
@@ -11,7 +12,9 @@
 # Enable deploys by adding, in repo Settings -> Secrets and variables -> Actions:
 #   CLOUDFLARE_API_TOKEN   token with Account · Workers Scripts: Edit
 #                          (+ Workers KV Storage: Edit for the `GUESTBOOK`
-#                          namespace, and Account Settings: Read). No AI or D1.
+#                          namespace, and Account Settings: Read), plus
+#                          Zone · Workers Routes: Edit for the custom domain
+#                          in wrangler.toml. No AI or D1.
 #   CLOUDFLARE_ACCOUNT_ID  target Cloudflare account id
 name: Deploy
 
@@ -90,3 +93,12 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: pnpm exec wrangler deploy
+      # A green `wrangler deploy` only proves the Worker uploaded. Whether the
+      # custom domain resolves to it, serves valid TLS, and reaches the KV
+      # binding is observable only against the deployed origin. Gated on the same
+      # preflight as the deploy, so a skipped deploy skips the smoke test too;
+      # the script additionally self-skips (exit 0) while the domain is not yet
+      # reachable, and fails loudly on any real HTTP or content problem.
+      - name: Smoke test — is the custom domain live?
+        if: steps.preflight.outputs.ready == 'true'
+        run: pnpm smoke
