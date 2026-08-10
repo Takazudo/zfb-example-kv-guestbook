@@ -58,14 +58,28 @@ async function get(path) {
   return { response, body: await response.text() };
 }
 
-/** fetch wraps the OS-level cause, so walk the chain to find the real code. */
-function notProvisionedCode(error) {
-  for (let cause = error, depth = 0; cause != null && depth < 10; cause = cause.cause, depth += 1) {
-    if (typeof cause.code === "string" && NOT_PROVISIONED_CODES.has(cause.code)) {
-      return cause.code;
+/**
+ * fetch wraps the OS-level failure, so dig for the real code.
+ *
+ * Two shapes have to be handled. A single-address host nests it as
+ * TypeError -> Error(code). A dual-stack host (IPv6 + IPv4) nests it as
+ * TypeError -> AggregateError -> errors[]; the AggregateError carries a
+ * top-level `code` only when every sub-error agrees, so the errors array has to
+ * be searched too. Missing that case would turn an intended self-skip into a red
+ * deploy, which is the exact outcome this script exists to avoid.
+ */
+function notProvisionedCode(error, depth = 0) {
+  if (error == null || depth > 10) return null;
+  if (typeof error.code === "string" && NOT_PROVISIONED_CODES.has(error.code)) {
+    return error.code;
+  }
+  if (Array.isArray(error.errors)) {
+    for (const nested of error.errors) {
+      const code = notProvisionedCode(nested, depth + 1);
+      if (code) return code;
     }
   }
-  return null;
+  return notProvisionedCode(error.cause, depth + 1);
 }
 
 async function runChecks() {
@@ -160,3 +174,9 @@ for (let attempt = 1; attempt <= ATTEMPTS; attempt += 1) {
   }
   await sleep(RETRY_DELAY_MS);
 }
+
+// Unreachable today: the final attempt always exits from inside the loop. Kept
+// so a future edit to that control flow fails loudly instead of falling out of
+// the loop and exiting 0 with nothing checked.
+console.log("::error::Smoke test ended without reaching a verdict");
+process.exit(1);
