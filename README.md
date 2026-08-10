@@ -116,15 +116,57 @@ This repo ships `.github/workflows/deploy.yml`:
 
 - **build** runs on every push and PR — `pnpm install`, `pnpm typecheck`,
   `pnpm build`. It needs no Cloudflare credentials, so CI is green immediately.
-- **deploy** runs on push to `main` and calls `wrangler deploy`. It self-skips
-  until the secrets below are set, so a fresh repo never shows a red deploy.
+- **deploy** runs on push to `main` and calls `wrangler deploy`, then smoke-tests
+  the live site. It self-skips until the secrets below are set, so a fresh repo
+  never shows a red deploy.
 
 Add these under **Settings → Secrets and variables → Actions**:
 
 | Secret | Value |
 | --- | --- |
-| `CLOUDFLARE_API_TOKEN` | API token with Account · Workers Scripts: Edit and Workers KV Storage: Edit |
+| `CLOUDFLARE_API_TOKEN` | API token with Account · Workers Scripts: Edit, Workers KV Storage: Edit, and Zone · Workers Routes: Edit |
 | `CLOUDFLARE_ACCOUNT_ID` | target Cloudflare account id |
+
+### Custom domain
+
+Production is served at
+<https://zfb-example-kv-guestbook.takazudomodular.com>, attached by the
+`[[routes]]` block in `wrangler.toml`:
+
+```toml
+[[routes]]
+pattern = "zfb-example-kv-guestbook.takazudomodular.com"
+custom_domain = true
+```
+
+`custom_domain = true` has Cloudflare create and manage the DNS record and TLS
+certificate for that hostname. The Worker stays reachable on its
+`*.workers.dev` subdomain too, because `wrangler.toml` sets `workers_dev = true`
+(and `preview_urls = true` alongside it — `preview_urls` defaults to *match*
+`workers_dev`, so leaving it out would silently tie per-deploy preview URLs to
+the production subdomain setting).
+
+### Post-deploy smoke test
+
+`scripts/smoke.mjs` runs after every deploy and asserts, read-only, that the
+live site actually works:
+
+```bash
+pnpm smoke                              # the production custom domain
+pnpm smoke http://localhost:4321        # a local `pnpm preview`
+```
+
+It checks that `/` answers `200` over valid TLS with the guestbook HTML, and
+that the KV read path completed — `/` is a `prerender = false` route that
+returns `503` when the `GUESTBOOK` binding is missing, so a rendered entry list
+*or* the "No entries yet." message both count as a pass. It also checks that
+`GET /api/entries` returns `200` with a JSON entries array. An empty guestbook
+passes; the script never writes an entry, because a post-deploy check must not
+mutate production data.
+
+It exits `0` with a notice — rather than failing — while the domain is not
+reachable yet, matching the deploy job's own self-skip. A domain that *does*
+respond but returns the wrong status or content fails the job loudly.
 
 Before deploy can run, create the KV namespace and commit its real id into `wrangler.toml` — the deploy job self-skips while the `REPLACE_WITH_KV_NAMESPACE_ID` placeholder remains (see **Provision Cloudflare resources** above). `ADMIN_TOKEN` is a Worker secret set with `wrangler secret put`, not a GitHub secret.
 
@@ -138,7 +180,13 @@ these permissions:
 - **Workers KV Storage** — Edit
 - **Account Settings** — Read
 
-Set **Account Resources → Include → (your account)**. No Zone permissions are
-needed — this repo deploys to a `*.workers.dev` host, not a custom domain. A
-single token can be shared across all `zfb-example-*` repos if it carries the
-union of every repo's permissions.
+Set **Account Resources → Include → (your account)**.
+
+This repo also serves a custom domain, which needs one **Zone**-scoped
+permission on top of the account ones:
+
+- **Workers Routes** — Edit, on the `takazudomodular.com` zone
+
+Without it `wrangler deploy` uploads the Worker and then fails on the route
+step, so the custom domain never attaches. A single token can be shared across
+all `zfb-example-*` repos if it carries the union of every repo's permissions.
