@@ -34,9 +34,15 @@ Custom Token, with these permissions:
 | Account | Workers Scripts     | Edit  |
 | Account | Workers KV Storage  | Edit  |
 | Account | Account Settings    | Read  |
+| Zone    | Workers Routes      | Edit  |
 
-Set **Account Resources → Include → (your account)**. No Zone permissions are
-needed — this repo deploys to a `*.workers.dev` host, not a custom domain.
+Set **Account Resources → Include → (your account)**, and for the Zone row set
+**Zone Resources → Include → takazudomodular.com**.
+
+The Zone row is required because this repo serves a custom domain
+(`zfb-example-kv-guestbook.takazudomodular.com`, declared as a `[[routes]]`
+entry in `wrangler.toml`). Without it `wrangler deploy` uploads the Worker and
+then fails on the route step, leaving the domain unattached.
 
 A shared token must carry the union of every repo's permissions, so if you are
 extending an existing one, confirm **Workers KV Storage: Edit** is present. It
@@ -147,17 +153,26 @@ pnpm build
 pnpm exec wrangler deploy
 ```
 
-The Worker lands at:
+The Worker lands on its custom domain:
+
+<https://zfb-example-kv-guestbook.takazudomodular.com>
+
+and, because `wrangler.toml` sets `workers_dev = true`, also stays reachable at:
 
 <https://zfb-example-kv-guestbook.takazudo.workers.dev>
+
+The deploy job runs `pnpm smoke` immediately afterwards, which asserts the
+custom domain serves the guestbook and that the KV read path works. It exits
+`0` with a notice while the domain is not reachable yet, so a first deploy that
+lands before DNS propagates does not go red.
 
 ## 6. Verify the deployment
 
 Run these against the deployed host. They are the README's examples pointed at
-production instead of `localhost:8787`.
+production instead of `localhost:4321`.
 
 ```bash
-BASE=https://zfb-example-kv-guestbook.takazudo.workers.dev
+BASE=https://zfb-example-kv-guestbook.takazudomodular.com
 ```
 
 **The page renders** — expect `200` and the guestbook form in the HTML:
