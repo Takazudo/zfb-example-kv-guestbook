@@ -3,6 +3,23 @@ main = "./dist/_worker.js"
 compatibility_date = "2026-05-01"
 compatibility_flags = ["nodejs_compat"]
 
+# Top-level fields MUST stay above the [assets] and [[kv_namespaces]] tables. In
+# TOML any key written after a table header is scoped INTO that table, so a
+# workers_dev/preview_urls placed below either one is silently ignored — wrangler
+# only warns "Unexpected fields found in assets field" and deploys without them.
+#
+# workers_dev keeps the public *.workers.dev subdomain
+# (zfb-example-kv-guestbook.takazudo.workers.dev) serving alongside the custom
+# domain below. It is also what makes preview URLs route at all: with workers_dev
+# disabled Cloudflare still PRINTS the preview URL at upload time, but the edge
+# rejects requests to it with "error code: 1042".
+workers_dev = true
+
+# preview_urls defaults to *match* workers_dev rather than to true, so leaving it
+# out silently couples per-deploy preview URLs to the production subdomain
+# setting. Set it explicitly so previews survive a later workers_dev = false.
+preview_urls = true
+
 [assets]
 directory = "./dist"
 binding = "ASSETS"
@@ -10,4 +27,17 @@ not_found_handling = "404-page"
 
 [[kv_namespaces]]
 binding = "GUESTBOOK"
+# Placeholder on purpose — the deploy job self-skips while any REPLACE_WITH_* is
+# present (see the preflight step in .github/workflows/deploy.yml), so this repo
+# does not deploy until a real namespace is provisioned and its id committed.
+# See docs/cloudflare-setup.md step 3.
 id = "REPLACE_WITH_KV_NAMESPACE_ID"
+
+# Custom domain. custom_domain = true makes Cloudflare create and manage the DNS
+# record and TLS certificate for this hostname, instead of matching a route
+# pattern against an existing zone record. It requires Zone · Workers Routes ·
+# Edit on the deploy token — a zone-scoped permission the account-scoped Workers
+# Scripts / Workers KV grants do not cover.
+[[routes]]
+pattern = "zfb-example-kv-guestbook.takazudomodular.com"
+custom_domain = true
