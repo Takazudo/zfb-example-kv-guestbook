@@ -99,6 +99,12 @@ jobs:
       # preflight as the deploy, so a skipped deploy skips the smoke test too;
       # the script additionally self-skips (exit 0) while the domain is not yet
       # reachable, and fails loudly on any real HTTP or content problem.
+      #
+      # SMOKE_REQUIRE_LIVE is deliberately NOT set. Sibling zfb examples set it
+      # because their custom domains are attached and must stay up; this repo is
+      # gated behind the KV placeholder above, so no domain exists yet and the
+      # flag would turn a correct skip into a permanent red. Turn it on in the
+      # same change that commits the real namespace id.
       - name: Smoke test — is the custom domain live?
         if: steps.preflight.outputs.ready == 'true'
         run: pnpm smoke

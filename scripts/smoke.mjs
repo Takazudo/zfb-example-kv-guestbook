@@ -15,6 +15,7 @@
  *   node scripts/smoke.mjs                       # production custom domain
  *   node scripts/smoke.mjs http://localhost:4321 # a local `pnpm preview`
  *   SMOKE_BASE_URL=https://… node scripts/smoke.mjs
+ *   SMOKE_REQUIRE_LIVE=1 node scripts/smoke.mjs  # "not ready yet" becomes a failure
  */
 
 const DEFAULT_BASE_URL = "https://zfb-example-kv-guestbook.takazudomodular.com";
@@ -24,10 +25,46 @@ const DEFAULT_BASE_URL = "https://zfb-example-kv-guestbook.takazudomodular.com";
  * "the site is broken". The house rule is that this repo never shows a red
  * deploy before it is provisioned, so these exit 0 with a notice.
  *
- * TLS and certificate error codes are deliberately absent: a domain that
- * resolves but fails TLS is a real misconfiguration and must fail loudly.
+ * ENETUNREACH / EHOSTUNREACH are the attach-time propagation window rather than
+ * a missing domain: Cloudflare publishes the AAAA record before the A record,
+ * and GitHub-hosted runners have no IPv6 route, so for a few minutes a fully
+ * working site is reachable only over an address family the runner cannot use.
+ *
+ * ERR_TLS_CERT_ALTNAME_INVALID is that same window seen through TLS — until the
+ * hostname's certificate is issued, the edge answers with one that does not
+ * cover it.
  */
-const NOT_PROVISIONED_CODES = new Set(["ENOTFOUND", "EAI_AGAIN", "ECONNREFUSED"]);
+const NOT_PROVISIONED_CODES = new Set([
+  "ENOTFOUND",
+  "EAI_AGAIN",
+  "ECONNREFUSED",
+  "ENETUNREACH",
+  "EHOSTUNREACH",
+  "ERR_TLS_CERT_ALTNAME_INVALID",
+]);
+
+/**
+ * Certificate failures that veto a skip even when a not-ready code is reported
+ * alongside them. A freshly issued edge certificate is never expired and never
+ * untrusted, so these can only mean an established domain broke. The veto
+ * matters because a dual-stack host fails differently per address family — no
+ * IPv6 route plus a broken certificate over IPv4 — and the broken half is the
+ * verdict.
+ */
+const MUST_FAIL_CODES = new Set([
+  "CERT_HAS_EXPIRED",
+  "DEPTH_ZERO_SELF_SIGNED_CERT",
+  "SELF_SIGNED_CERT_IN_CHAIN",
+  "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+]);
+
+/**
+ * Opt-in strictness for the day this site is live: every skip above becomes an
+ * ordinary failure. Deliberately unset in CI here — the KV namespace id is still
+ * a REPLACE_WITH_* placeholder, so the domain is intentionally not attached and
+ * "not reachable" is the correct steady state for this repo.
+ */
+const REQUIRE_LIVE = /^(1|true)$/i.test(process.env.SMOKE_REQUIRE_LIVE ?? "");
 
 const REQUEST_TIMEOUT_MS = 15_000;
 /** A freshly deployed Worker can 5xx briefly while it propagates to every PoP. */
@@ -59,7 +96,7 @@ async function get(path) {
 }
 
 /**
- * fetch wraps the OS-level failure, so dig for the real code.
+ * fetch wraps the OS-level failure, so dig out every real code beneath it.
  *
  * Two shapes have to be handled. A single-address host nests it as
  * TypeError -> Error(code). A dual-stack host (IPv6 + IPv4) nests it as
@@ -67,19 +104,24 @@ async function get(path) {
  * top-level `code` only when every sub-error agrees, so the errors array has to
  * be searched too. Missing that case would turn an intended self-skip into a red
  * deploy, which is the exact outcome this script exists to avoid.
+ *
+ * Every code is collected rather than the first match, because the two legs of a
+ * dual-stack attempt can fail for unrelated reasons and the verdict depends on
+ * seeing both.
  */
-function notProvisionedCode(error, depth = 0) {
-  if (error == null || depth > 10) return null;
-  if (typeof error.code === "string" && NOT_PROVISIONED_CODES.has(error.code)) {
-    return error.code;
-  }
+function errorCodes(error, depth = 0, found = []) {
+  if (error == null || depth > 10) return found;
+  if (typeof error.code === "string") found.push(error.code);
   if (Array.isArray(error.errors)) {
-    for (const nested of error.errors) {
-      const code = notProvisionedCode(nested, depth + 1);
-      if (code) return code;
-    }
+    for (const nested of error.errors) errorCodes(nested, depth + 1, found);
   }
-  return notProvisionedCode(error.cause, depth + 1);
+  return errorCodes(error.cause, depth + 1, found);
+}
+
+/** The code to skip on, or null when this failure has to be reported as red. */
+function notProvisionedCode(codes) {
+  if (codes.some((code) => MUST_FAIL_CODES.has(code))) return null;
+  return codes.find((code) => NOT_PROVISIONED_CODES.has(code)) ?? null;
 }
 
 async function runChecks() {
@@ -158,19 +200,23 @@ for (let attempt = 1; attempt <= ATTEMPTS; attempt += 1) {
     }
     console.log(`Attempt ${attempt} found ${failures.length} problem(s); retrying…`);
   } catch (error) {
-    const code = notProvisionedCode(error);
-    if (code) {
+    const codes = errorCodes(error);
+    const skipCode = notProvisionedCode(codes);
+    if (skipCode && !REQUIRE_LIVE) {
       notice(
-        `${baseUrl} is not reachable yet (${code}) — skipping the smoke test. ` +
+        `${baseUrl} is not reachable yet (${skipCode}) — skipping the smoke test. ` +
           "Attach the custom domain in Cloudflare, then re-run.",
       );
       process.exit(0);
     }
+    // `fetch` reports every network failure as the same "fetch failed", so the
+    // collected codes are the only thing that says which one it was.
+    const detail = codes.length > 0 ? codes.join(", ") : (error?.message ?? error);
     if (lastAttempt) {
-      console.log(`::error::Smoke test could not reach ${baseUrl}: ${error?.message ?? error}`);
+      console.log(`::error::Smoke test could not reach ${baseUrl}: ${detail}`);
       process.exit(1);
     }
-    console.log(`Attempt ${attempt} failed (${error?.message ?? error}); retrying…`);
+    console.log(`Attempt ${attempt} failed (${detail}); retrying…`);
   }
   await sleep(RETRY_DELAY_MS);
 }
