@@ -18,6 +18,8 @@
  *   SMOKE_REQUIRE_LIVE=1 node scripts/smoke.mjs  # "not ready yet" becomes a failure
  */
 
+import { request as httpsRequest } from "node:https";
+
 const DEFAULT_BASE_URL = "https://zfb-example-kv-guestbook.takazudomodular.com";
 
 /**
@@ -96,6 +98,50 @@ async function get(path) {
 }
 
 /**
+ * A request carrying `sec-fetch-mode: navigate`, i.e. what a browser sends when
+ * a person opens the URL. This MUST NOT use fetch(): `Sec-` prefixed names are
+ * forbidden header names in the Fetch spec, so undici silently drops them and
+ * the request goes out as an ordinary one. That is not a cosmetic difference —
+ * Cloudflare's asset layer applies `not_found_handling` only to NAVIGATION
+ * requests, so a plain fetch falls through to the Worker and renders fine while
+ * every real visitor gets the 404 page. This check exists because that exact
+ * bug shipped and passed a fetch-based smoke test.
+ *
+ * node:https writes the headers verbatim, so it can reproduce a real navigation.
+ */
+function navigationGet(path) {
+  return new Promise((resolve, reject) => {
+    const url = new URL(path, baseUrl);
+    const request = httpsRequest(
+      {
+        hostname: url.hostname,
+        port: url.port || 443,
+        path: url.pathname + url.search,
+        method: "GET",
+        headers: {
+          "user-agent": "zfb-example-kv-guestbook-smoke",
+          accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "sec-fetch-mode": "navigate",
+          "sec-fetch-dest": "document",
+          "sec-fetch-site": "none",
+          "upgrade-insecure-requests": "1",
+        },
+        timeout: REQUEST_TIMEOUT_MS,
+      },
+      (res) => {
+        let body = "";
+        res.setEncoding("utf8");
+        res.on("data", (chunk) => (body += chunk));
+        res.on("end", () => resolve({ status: res.statusCode, headers: res.headers, body }));
+      },
+    );
+    request.on("timeout", () => request.destroy(new Error("navigation request timed out")));
+    request.on("error", reject);
+    request.end();
+  });
+}
+
+/**
  * fetch wraps the OS-level failure, so dig out every real code beneath it.
  *
  * Two shapes have to be handled. A single-address host nests it as
@@ -155,6 +201,22 @@ async function runChecks() {
   check(
     home.body.includes('class="entry-list"') || home.body.includes("No entries yet."),
     "GET / rendered neither an entry list nor the empty-guestbook message — the KV read path did not complete",
+  );
+
+  // What a person actually gets. The checks above use fetch(), which cannot send
+  // `sec-fetch-mode: navigate` (a forbidden header name, silently dropped), so
+  // they exercise a request shape no browser ever produces. Cloudflare's asset
+  // layer applies `not_found_handling` only to navigation requests, so the two
+  // can disagree completely: this site once served a correct 200 to fetch() and
+  // the 404 page to every human visitor, and the suite stayed green.
+  const nav = await navigationGet("/");
+  check(
+    nav.status === 200,
+    `A browser navigation to / expected 200, got ${nav.status} — the asset layer is answering before the Worker (check run_worker_first)`,
+  );
+  check(
+    nav.body.includes('class="page-title">Guestbook'),
+    "A browser navigation to / did not render the Guestbook heading — it likely received the 404 page",
   );
 
   const api = await get("/api/entries");

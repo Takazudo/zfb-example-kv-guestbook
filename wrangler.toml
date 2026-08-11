@@ -25,6 +25,19 @@ directory = "./dist"
 binding = "ASSETS"
 not_found_handling = "404-page"
 
+# The homepage is `prerender = false`, so the build emits NO dist/index.html —
+# `/` is rendered by the Worker. But the asset layer is consulted first, and for
+# a NAVIGATION request (one carrying `sec-fetch-mode: navigate`, which every real
+# browser sends) an unmatched path is answered with `not_found_handling`. With a
+# prerendered dist/404.html present, that meant `/` served the 404 page and the
+# Worker never ran — the site was broken for every human visitor while curl,
+# which sends no such header, fell through to the Worker and saw a correct 200.
+#
+# Running the Worker first for exactly these paths fixes it without giving up
+# direct asset serving: real files under /assets/* are still returned by the
+# asset layer without invoking the Worker.
+run_worker_first = ["/", "/api/*"]
+
 [[kv_namespaces]]
 binding = "GUESTBOOK"
 # Provisioned by .github/workflows/kv-bootstrap.yml (workflow_dispatch), which
