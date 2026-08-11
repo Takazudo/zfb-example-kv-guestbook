@@ -1,0 +1,104 @@
+# One-time KV provisioning workflow for zfb-example-kv-guestbook.
+#
+# WHY THIS EXISTS
+# ---------------
+# `wrangler.toml` ships `id = "REPLACE_WITH_KV_NAMESPACE_ID"`, and the deploy
+# job self-skips while any REPLACE_WITH_* placeholder is present. Turning that
+# placeholder into a real id needs `wrangler kv namespace create`, which must run
+# against the SAME Cloudflare account as this repo's CLOUDFLARE_* secrets — and
+# those secrets do not exist on a developer machine. So provisioning runs in CI,
+# where they do, and this workflow surfaces the resulting id as a step summary +
+# downloadable artifact to be committed into `wrangler.toml`.
+#
+# Modelled on zfb-example-webshop's `d1-bootstrap.yml`, which solves the same
+# problem for D1.
+#
+# It is `workflow_dispatch` only — it never runs on push. Once the id is
+# committed this workflow is dormant, and stays in the repo as a re-runnable
+# bootstrap in case the namespace is ever recreated.
+#
+# USAGE
+# -----
+#   gh workflow run kv-bootstrap.yml --ref topic/kv-bootstrap
+#   gh run watch <run-id>
+#   gh run download <run-id> -n kv-id
+name: KV bootstrap (one-time)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bootstrap:
+    name: Provision the GUESTBOOK KV namespace
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Install wrangler
+        run: npm install -g wrangler@4
+
+      - name: Create the KV namespace (idempotent)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          # `kv namespace create` errors when the title is already taken.
+          # Tolerate that so the workflow is re-runnable — the canonical id is
+          # read from `kv namespace list` below, never from create output.
+          out=$(wrangler kv namespace create zfb-example-kv-guestbook 2>&1) || true
+          echo "$out"
+
+      - name: Resolve the namespace id
+        id: kv
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          wrangler kv namespace list > kv-list.json
+          cat kv-list.json
+
+          # wrangler has shipped both bare titles and <worker>-<binding> style
+          # ones, so match exactly first and fall back to a substring match.
+          # An ambiguous fallback is an error rather than a coin flip — writing
+          # the wrong id here would bind the Worker to someone else's data.
+          ID=$(jq -r '.[] | select(.title == "zfb-example-kv-guestbook") | .id' kv-list.json)
+          if [ -z "$ID" ] || [ "$ID" = "null" ]; then
+            MATCHES=$(jq -r '.[] | select(.title | test("zfb-example-kv-guestbook")) | .id' kv-list.json)
+            COUNT=$(printf '%s\n' "$MATCHES" | grep -c . || true)
+            if [ "$COUNT" -gt 1 ]; then
+              echo "::error::multiple KV namespaces match 'zfb-example-kv-guestbook' — resolve by hand:"
+              jq -r '.[] | select(.title | test("zfb-example-kv-guestbook")) | "  \(.id)  \(.title)"' kv-list.json
+              exit 1
+            fi
+            ID="$MATCHES"
+          fi
+          if [ -z "$ID" ] || [ "$ID" = "null" ]; then
+            echo "::error::could not resolve a KV namespace id for 'zfb-example-kv-guestbook'"
+            exit 1
+          fi
+
+          jq -n --arg id "$ID" '{GUESTBOOK: $id}' > kv-id.json
+          cat kv-id.json
+          {
+            echo "## GUESTBOOK KV namespace id"
+            echo ""
+            echo "Paste into \`wrangler.toml\`, replacing REPLACE_WITH_KV_NAMESPACE_ID:"
+            echo ""
+            echo '```toml'
+            echo "[[kv_namespaces]]"
+            echo 'binding = "GUESTBOOK"'
+            echo "id = \"$ID\""
+            echo '```'
+            echo ""
+            echo "Then commit and push — the deploy job stops self-skipping once no"
+            echo "REPLACE_WITH_* placeholder remains."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the KV id artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: kv-id
+          path: kv-id.json
+          if-no-files-found: error
