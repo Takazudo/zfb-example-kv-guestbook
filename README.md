@@ -77,7 +77,12 @@ pnpm exec wrangler deploy
 - `GET /api/entries` returns the current bounded entry window as JSON.
 - `POST /api/entries` accepts JSON, form, or text input with a `message`.
 - `DELETE /api/entries/<entry-key>` deletes an entry when the request includes
-  `Authorization: Bearer <ADMIN_TOKEN>`.
+  `Authorization: Bearer <ADMIN_TOKEN>`. This is the reference pattern — a real
+  guestbook gates deletion.
+- The **Delete button next to each entry** posts to `/` instead and is
+  deliberately **unauthenticated**, so a visitor can exercise the full
+  post-and-delete loop on the live demo. That is a demo affordance layered on
+  top, not part of the pattern worth copying.
 
 Example JSON write:
 

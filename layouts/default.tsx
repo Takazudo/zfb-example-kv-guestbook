@@ -192,6 +192,31 @@ button:hover {
   font-size: 0.8125rem;
 }
 
+/* Pushed to the far end of the .entry-meta flex row so it never competes with
+   the timestamp and key for attention. Deliberately overrides the base button
+   style: that one is the blue primary used for "Post entry", and a row of
+   those would read as the main action on the page rather than a per-entry
+   affordance. Destructive intent shows on hover instead. */
+.entry-delete {
+  margin-left: auto;
+}
+
+.entry-delete button {
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.875em;
+  font-weight: 400;
+}
+
+.entry-delete button:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+  background: #fdf3f2;
+}
+
 code {
   border: 1px solid var(--border);
   border-radius: 5px;

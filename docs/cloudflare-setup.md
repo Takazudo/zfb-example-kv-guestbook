@@ -138,6 +138,11 @@ pnpm exec wrangler secret put ADMIN_TOKEN
 Without it, `DELETE /api/entries/<key>` returns `503`; the read and write paths
 keep working.
 
+Note this gates the **API endpoint only**. The Delete button beside each entry
+posts to `/` and is deliberately unauthenticated, so visitors can try the whole
+loop on the live demo — the guestbook page says as much. Setting `ADMIN_TOKEN`
+does not disable those buttons.
+
 For local `pnpm preview`, the equivalent is a `.dev.vars` file (git-ignored):
 
 ```dotenv

@@ -29,6 +29,10 @@ export default async function EntryAdminApi({ params }: Props) {
     return methodNotAllowed(["DELETE"]);
   }
 
+  // The API keeps the admin gate even though the page's own Delete button is
+  // open. This endpoint is the part a reader would copy into a real guestbook,
+  // and a real guestbook does not let anonymous callers delete entries. The
+  // open button is a demo affordance layered on top, not the reference pattern.
   const auth = await requireAdmin(request, env);
   if (!auth.ok) {
     return auth.response;

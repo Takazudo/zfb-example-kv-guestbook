@@ -17,6 +17,8 @@ export interface GuestbookEntry {
 
 export interface Env {
   GUESTBOOK?: KVNamespace<EntryKey>;
+  // Gates DELETE /api/entries/<key> only. The page's own Delete button is
+  // deliberately open — see the comment in pages/api/entries/[key].tsx.
   ADMIN_TOKEN?: string;
 }
 
