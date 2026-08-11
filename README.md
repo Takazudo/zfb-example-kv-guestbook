@@ -27,18 +27,28 @@ For the ordered, from-zero walkthrough — token, GitHub secrets, KV namespace,
 Worker secret, first deploy — see [docs/cloudflare-setup.md](docs/cloudflare-setup.md).
 The sections below stay as per-topic reference.
 
-Create a KV namespace:
+The KV namespace is already provisioned and its id committed, so this is
+reference only — re-run it if the namespace is ever recreated. The
+`KV bootstrap (one-time)` workflow does it in CI, where the `CLOUDFLARE_*`
+secrets live:
+
+```bash
+gh workflow run kv-bootstrap.yml --ref main
+gh run download <run-id> -n kv-id
+```
+
+Locally (needs your own Cloudflare credentials):
 
 ```bash
 pnpm exec wrangler kv namespace create zfb-example-kv-guestbook
 ```
 
-Paste the printed namespace ID into `wrangler.toml`:
+Either way, paste the id into `wrangler.toml`:
 
 ```toml
 [[kv_namespaces]]
 binding = "GUESTBOOK"
-id = "REPLACE_WITH_KV_NAMESPACE_ID"
+id = "<the provisioned namespace id>"
 ```
 
 Set the admin delete token as a secret:
@@ -168,7 +178,7 @@ It exits `0` with a notice — rather than failing — while the domain is not
 reachable yet, matching the deploy job's own self-skip. A domain that *does*
 respond but returns the wrong status or content fails the job loudly.
 
-Before deploy can run, create the KV namespace and commit its real id into `wrangler.toml` — the deploy job self-skips while the `REPLACE_WITH_KV_NAMESPACE_ID` placeholder remains (see **Provision Cloudflare resources** above). `ADMIN_TOKEN` is a Worker secret set with `wrangler secret put`, not a GitHub secret.
+The KV namespace is provisioned and its id committed, so the deploy job runs and the site is live. `ADMIN_TOKEN` is a Worker secret set with `wrangler secret put`, not a GitHub secret; without it the admin delete route stays closed while the rest of the guestbook works.
 
 ### Cloudflare API token permissions
 

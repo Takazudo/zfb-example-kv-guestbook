@@ -27,11 +27,10 @@ not_found_handling = "404-page"
 
 [[kv_namespaces]]
 binding = "GUESTBOOK"
-# Placeholder on purpose — the deploy job self-skips while any REPLACE_WITH_* is
-# present (see the preflight step in .github/workflows/deploy.yml), so this repo
-# does not deploy until a real namespace is provisioned and its id committed.
-# See docs/cloudflare-setup.md step 3.
-id = "REPLACE_WITH_KV_NAMESPACE_ID"
+# Provisioned by .github/workflows/kv-bootstrap.yml (workflow_dispatch), which
+# runs `wrangler kv namespace create` in CI where the CLOUDFLARE_* secrets live.
+# Re-run that workflow if the namespace is ever recreated.
+id = "c9f6b0b214fd4b9d9137d0c31d781884"
 
 # Custom domain. custom_domain = true makes Cloudflare create and manage the DNS
 # record and TLS certificate for this hostname, instead of matching a route

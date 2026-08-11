@@ -3,10 +3,13 @@
 An ordered, from-zero walkthrough that takes this repo from "never deployed" to
 "live on Workers with a working KV guestbook".
 
-**This repo is not deployed yet.** No Cloudflare secrets are set on it, and
-`wrangler.toml` still carries the `REPLACE_WITH_KV_NAMESPACE_ID` placeholder.
-The `deploy` job in `.github/workflows/deploy.yml` self-skips while *either* of
-those is true, so you must clear **both** gates before a deploy will run:
+**Both gates are now cleared** — the KV namespace is provisioned and its real
+id is committed in `wrangler.toml`, so the `deploy` job runs and the site is live
+at https://zfb-example-kv-guestbook.takazudomodular.com/.
+
+The walkthrough below is kept as the from-zero reference (and for re-provisioning
+if the namespace is ever recreated). The `deploy` job self-skips while *either*
+of these is unmet:
 
 1. `CLOUDFLARE_API_TOKEN` exists as a repo secret (step 2), and
 2. `wrangler.toml` holds a real KV namespace id (step 3).
@@ -77,7 +80,20 @@ gh secret list --repo Takazudo/zfb-example-kv-guestbook
 ## 3. Provision the KV namespace and commit its real id
 
 This step is required — the deploy job refuses to run while the placeholder
-remains. Create the namespace:
+remains. **Already done**: the id is committed, provisioned by the
+`KV bootstrap (one-time)` workflow.
+
+Prefer that workflow over running this locally — it executes
+`wrangler kv namespace create` in CI, where the `CLOUDFLARE_*` secrets actually
+live, and prints the id as a step summary plus a downloadable artifact:
+
+```bash
+gh workflow run kv-bootstrap.yml --ref main
+gh run watch <run-id>
+gh run download <run-id> -n kv-id
+```
+
+To do it locally instead you need your own Cloudflare credentials:
 
 ```bash
 pnpm exec wrangler kv namespace create zfb-example-kv-guestbook
