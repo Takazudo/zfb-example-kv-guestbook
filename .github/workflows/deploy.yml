@@ -100,11 +100,13 @@ jobs:
       # the script additionally self-skips (exit 0) while the domain is not yet
       # reachable, and fails loudly on any real HTTP or content problem.
       #
-      # SMOKE_REQUIRE_LIVE is deliberately NOT set. Sibling zfb examples set it
-      # because their custom domains are attached and must stay up; this repo is
-      # gated behind the KV placeholder above, so no domain exists yet and the
-      # flag would turn a correct skip into a permanent red. Turn it on in the
-      # same change that commits the real namespace id.
+      # SMOKE_REQUIRE_LIVE retires the script's self-skip. The KV namespace id is
+      # committed and the domain is attached and serving, so "not reachable yet"
+      # can no longer legitimately occur — it is an outage, and must go red
+      # rather than quietly exit 0. This is the flag the comment here previously
+      # said to turn on alongside the real namespace id.
       - name: Smoke test — is the custom domain live?
         if: steps.preflight.outputs.ready == 'true'
+        env:
+          SMOKE_REQUIRE_LIVE: "1"
         run: pnpm smoke
