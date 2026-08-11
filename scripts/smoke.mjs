@@ -70,8 +70,13 @@ const REQUIRE_LIVE = /^(1|true)$/i.test(process.env.SMOKE_REQUIRE_LIVE ?? "");
 
 const REQUEST_TIMEOUT_MS = 15_000;
 /** A freshly deployed Worker can 5xx briefly while it propagates to every PoP. */
-const ATTEMPTS = 3;
-const RETRY_DELAY_MS = 5_000;
+// This runs seconds after `wrangler deploy` returns, but that call completes when
+// the upload finishes, not when the new version is serving everywhere. A ~10s
+// budget was too short: the first post-fix deploy went red against a Worker that
+// was correct and live moments later. Wide enough to ride out version rollout,
+// still bounded so a genuinely broken deploy fails rather than hangs.
+const ATTEMPTS = 6;
+const RETRY_DELAY_MS = 10_000;
 
 const baseUrl = (process.argv[2] ?? process.env.SMOKE_BASE_URL ?? DEFAULT_BASE_URL).replace(
   /\/+$/,
