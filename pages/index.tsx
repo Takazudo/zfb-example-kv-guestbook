@@ -90,7 +90,17 @@ export default async function HomePage() {
       <div class="stack">
         <section>
           <h1 class="page-title">Guestbook</h1>
-          <p class="muted">A small server-rendered recipe backed by Cloudflare Workers KV.</p>
+          <p class="muted">
+            A working demo of zfb + Cloudflare Workers KV — server-rendered pages,
+            real KV reads and writes, deployed on Workers.
+          </p>
+          <p class="muted">
+            Post anything, and delete any entry with the button beside it. Deletion is
+            open here so you can try the whole loop. A real guestbook would not do
+            that, which is why the <code>DELETE /api/entries/&lt;key&gt;</code> endpoint
+            below still requires an admin token — that endpoint is the part worth
+            copying.
+          </p>
         </section>
 
         {notice ? <div class="notice">{notice}</div> : null}
@@ -147,6 +157,11 @@ export default async function HomePage() {
           <h2 class="section-title" id="api-title">
             API
           </h2>
+          <p class="muted">
+            <code>DELETE</code> requires <code>Authorization: Bearer &lt;ADMIN_TOKEN&gt;</code>.
+            The Delete buttons above post to this page instead, which is why they work
+            without one.
+          </p>
           <div class="api-list">
             <code>GET /api/entries</code>
             <code>POST /api/entries</code>

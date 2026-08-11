@@ -51,6 +51,18 @@ binding = "GUESTBOOK"
 id = "<the provisioned namespace id>"
 ```
 
+Set the admin delete token as a secret:
+
+```bash
+pnpm exec wrangler secret put ADMIN_TOKEN
+```
+
+For local `pnpm preview`, put a local token in `.dev.vars`:
+
+```dotenv
+ADMIN_TOKEN=local-dev-token
+```
+
 Deploy after building:
 
 ```bash
@@ -64,9 +76,13 @@ pnpm exec wrangler deploy
 - `POST /` handles the form, queues the KV write, and redirects back to `/`.
 - `GET /api/entries` returns the current bounded entry window as JSON.
 - `POST /api/entries` accepts JSON, form, or text input with a `message`.
-- `DELETE /api/entries/<entry-key>` deletes an entry. **Unauthenticated by
-  design** — this is a throwaway demo, so anyone can delete any entry, matching
-  the Delete button next to each entry in the UI.
+- `DELETE /api/entries/<entry-key>` deletes an entry when the request includes
+  `Authorization: Bearer <ADMIN_TOKEN>`. This is the reference pattern — a real
+  guestbook gates deletion.
+- The **Delete button next to each entry** posts to `/` instead and is
+  deliberately **unauthenticated**, so a visitor can exercise the full
+  post-and-delete loop on the live demo. That is a demo affordance layered on
+  top, not part of the pattern worth copying.
 
 Example JSON write:
 
@@ -76,12 +92,13 @@ curl -X POST http://localhost:8787/api/entries \
   --data '{"message":"hello from curl"}'
 ```
 
-Example delete:
+Example admin delete:
 
 ```bash
 ENTRY_KEY='entry:2026-07-10T00:00:00.000Z:replace'
 ENCODED_KEY=$(node -e 'process.stdout.write(encodeURIComponent(process.argv[1]))' "$ENTRY_KEY")
-curl -X DELETE "http://localhost:8787/api/entries/$ENCODED_KEY"
+curl -X DELETE "http://localhost:8787/api/entries/$ENCODED_KEY" \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
 ```
 
 ## KV behavior
@@ -101,7 +118,8 @@ Workers subrequest budgets and avoids opening an unbounded number of KV
 connections for a single request.
 
 If the `GUESTBOOK` binding is missing, routes return a clear `503` JSON or text
-response.
+response. If `ADMIN_TOKEN` is missing, the delete endpoint returns a clear
+`503`; missing or wrong bearer tokens return `401`.
 
 ## Continuous deployment (GitHub Actions)
 
@@ -165,7 +183,7 @@ It exits `0` with a notice — rather than failing — while the domain is not
 reachable yet, matching the deploy job's own self-skip. A domain that *does*
 respond but returns the wrong status or content fails the job loudly.
 
-The KV namespace is provisioned and its id committed, so the deploy job runs and the site is live. Deletion needs no secret — it is open by design (see the API section).
+The KV namespace is provisioned and its id committed, so the deploy job runs and the site is live. `ADMIN_TOKEN` is a Worker secret set with `wrangler secret put`, not a GitHub secret; without it the admin delete route stays closed while the rest of the guestbook works.
 
 ### Cloudflare API token permissions
 
