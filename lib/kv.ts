@@ -17,7 +17,6 @@ export interface GuestbookEntry {
 
 export interface Env {
   GUESTBOOK?: KVNamespace<EntryKey>;
-  ADMIN_TOKEN?: string;
 }
 
 export interface EntryListResult {

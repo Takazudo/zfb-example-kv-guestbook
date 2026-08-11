@@ -5,8 +5,10 @@ import {
   getGuestbookContext,
   getGuestbookKv,
   listGuestbookEntries,
+  isEntryKey,
   parseEntrySubmission,
   queueEntryWrite,
+  type EntryKey,
   type EntryListResult,
 } from "../lib/kv";
 
@@ -31,6 +33,19 @@ export default async function HomePage() {
   }
 
   if (request.method === "POST") {
+    // A delete arrives as the same form POST as a new entry, distinguished by a
+    // `delete` field. Peek at a CLONE: parseEntrySubmission below consumes the
+    // body, and a Request body can only be read once.
+    const deleteKey = await readDeleteKey(request);
+    if (deleteKey) {
+      try {
+        await kv.delete(deleteKey);
+      } catch {
+        return redirectTo("/", request, { error: "Entry could not be deleted." });
+      }
+      return redirectTo("/", request, { deleted: "1" });
+    }
+
     const submission = await parseEntrySubmission(request);
     if (!submission.ok) {
       return redirectTo("/", request, { error: submission.error });
@@ -63,7 +78,11 @@ export default async function HomePage() {
 
   const url = new URL(request.url);
   const notice =
-    url.searchParams.get("queued") === "1" ? "Entry queued. It may take a moment to appear." : null;
+    url.searchParams.get("queued") === "1"
+      ? "Entry queued. It may take a moment to appear."
+      : url.searchParams.get("deleted") === "1"
+        ? "Entry deleted."
+        : null;
   const error = url.searchParams.get("error");
 
   return (
@@ -79,7 +98,7 @@ export default async function HomePage() {
 
         <section class="panel" aria-labelledby="sign-title">
           <h2 class="section-title" id="sign-title">
-            Sign
+            Sign the guestbook
           </h2>
           <form class="entry-form" method="post" action="/">
             <label for="message">Message</label>
@@ -109,6 +128,12 @@ export default async function HomePage() {
                   <div class="entry-meta">
                     <time dateTime={entry.createdAt}>{formatDate(entry.createdAt)}</time>
                     <code>{entry.key}</code>
+                    <form class="entry-delete" method="post" action="/">
+                      <input type="hidden" name="delete" value={entry.key} />
+                      <button type="submit" aria-label={`Delete entry: ${entry.message}`}>
+                        Delete
+                      </button>
+                    </form>
                   </div>
                 </li>
               ))}
@@ -131,6 +156,34 @@ export default async function HomePage() {
       </div>
     </DefaultLayout>
   );
+}
+
+/**
+ * The entry key a delete form submitted, or null when this POST is a new entry.
+ *
+ * Reads a CLONE so the original body stays unread for parseEntrySubmission — a
+ * Request body is a stream and can only be consumed once. A JSON POST has no
+ * form body at all, so the parse throws and we fall through to the entry path.
+ */
+async function readDeleteKey(request: Request): Promise<EntryKey | null> {
+  const contentType = request.headers.get("content-type")?.toLowerCase() ?? "";
+  if (
+    !contentType.includes("application/x-www-form-urlencoded") &&
+    !contentType.includes("multipart/form-data")
+  ) {
+    return null;
+  }
+
+  let form: FormData;
+  try {
+    form = await request.clone().formData();
+  } catch {
+    return null;
+  }
+
+  const candidate = form.get("delete");
+  if (typeof candidate !== "string" || !isEntryKey(candidate)) return null;
+  return candidate;
 }
 
 function redirectTo(pathname: string, request: Request, params: Record<string, string>): Response {

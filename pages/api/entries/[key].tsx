@@ -1,4 +1,3 @@
-import { requireAdmin } from "../../../lib/auth";
 import {
   getGuestbookContext,
   getGuestbookKv,
@@ -27,11 +26,6 @@ export default async function EntryAdminApi({ params }: Props) {
   const { request, env } = cf;
   if (request.method !== "DELETE") {
     return methodNotAllowed(["DELETE"]);
-  }
-
-  const auth = await requireAdmin(request, env);
-  if (!auth.ok) {
-    return auth.response;
   }
 
   const kv = getGuestbookKv(env);

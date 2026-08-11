@@ -118,31 +118,14 @@ git commit -m "chore: set real KV namespace id"
 git push origin main
 ```
 
-## 4. Set the `ADMIN_TOKEN` Worker secret
+## 4. No secret needed — deletion is open
 
-**This is a Cloudflare-side Worker secret, not a GitHub Actions secret.** It is
-the most confusable part of this setup:
+This step used to set an `ADMIN_TOKEN` Worker secret that gated
+`DELETE /api/entries/<key>`. It is gone: this is a throwaway demo, so anyone can
+delete any entry, and every entry carries a Delete button in the UI.
 
-- Steps 2's secrets live in **GitHub** and let the CI job authenticate to
-  Cloudflare in order to deploy.
-- `ADMIN_TOKEN` lives in **Cloudflare**, attached to the deployed Worker, and is
-  what the running Worker compares incoming bearer tokens against. GitHub never
-  sees it, and adding it to GitHub secrets would do nothing.
-
-Set it with wrangler, which prompts for the value:
-
-```bash
-pnpm exec wrangler secret put ADMIN_TOKEN
-```
-
-Without it, `DELETE /api/entries/<key>` returns `503`; the read and write paths
-keep working.
-
-For local `pnpm preview`, the equivalent is a `.dev.vars` file (git-ignored):
-
-```dotenv
-ADMIN_TOKEN=local-dev-token
-```
+Nothing to do here. If you set `ADMIN_TOKEN` on a Worker earlier, it is now
+unused and can be removed from the dashboard (Settings → Variables and secrets).
 
 ## 5. Trigger the first deploy
 
@@ -219,14 +202,13 @@ Read back after a moment and confirm the entry appears, then copy its `key`:
 sleep 5 && curl -s "$BASE/api/entries"
 ```
 
-**Admin delete works** — expect `{"ok":true,"deleted":"..."}`. Use the key from
-the read above:
+**Delete works** — expect `{"ok":true,"deleted":"..."}`. Use the key from the
+read above; no authentication is required:
 
 ```bash
 ENTRY_KEY='entry:2026-07-10T00:00:00.000Z:replace'
 ENCODED_KEY=$(node -e 'process.stdout.write(encodeURIComponent(process.argv[1]))' "$ENTRY_KEY")
-curl -X DELETE "$BASE/api/entries/$ENCODED_KEY" \
-  -H "Authorization: Bearer $ADMIN_TOKEN"
+curl -X DELETE "$BASE/api/entries/$ENCODED_KEY"
 ```
 
 If all five pass, the setup is complete.
@@ -245,17 +227,9 @@ carried the change actually succeeded. The same `503` is expected under
 `pnpm dev`, which has no Cloudflare bindings at all — use `pnpm build` plus
 `pnpm preview` for local binding-backed testing.
 
-**`503` from `DELETE /api/entries/<key>`, while reads and writes work.**
-`ADMIN_TOKEN` is unset on the Worker (step 4). The delete route checks
-authentication before it touches KV, so a missing token shadows everything
-downstream. Note the wording: the response body says `ADMIN_TOKEN is not
-configured`, which distinguishes it from the binding `503` above.
-
-**`401` from `DELETE`.** The token was checked and did not match — the header is
-missing, is not in `Authorization: Bearer <token>` form, or carries the wrong
-value. This means `ADMIN_TOKEN` *is* set, so compare against the value you fed
-to `wrangler secret put`. Secrets are write-only; if you no longer know it, set
-a new one rather than trying to read it back.
+**`401` or `503` from `DELETE /api/entries/<key>`.** Not possible any more —
+the route is unauthenticated. If you see one, the Worker is running an older
+version from before deletion was opened up; redeploy.
 
 **A just-written entry does not appear.** Expected, briefly. `POST` hands
 `KV.put(...)` to `ctx.waitUntil()` and returns `202` before the write settles,
