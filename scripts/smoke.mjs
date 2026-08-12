@@ -62,9 +62,9 @@ const MUST_FAIL_CODES = new Set([
 
 /**
  * Opt-in strictness for the day this site is live: every skip above becomes an
- * ordinary failure. Deliberately unset in CI here — the KV namespace id is still
- * a REPLACE_WITH_* placeholder, so the domain is intentionally not attached and
- * "not reachable" is the correct steady state for this repo.
+ * ordinary failure. Set in CI (deploy.yml, smoke-test step) — the KV namespace id
+ * is committed and the custom domain is attached and serving, so "not reachable"
+ * is now an outage. Leave it unset for local runs, or for forks not yet provisioned.
  */
 const REQUIRE_LIVE = /^(1|true)$/i.test(process.env.SMOKE_REQUIRE_LIVE ?? "");
 
