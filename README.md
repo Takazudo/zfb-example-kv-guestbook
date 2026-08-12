@@ -87,7 +87,7 @@ pnpm exec wrangler deploy
 Example JSON write:
 
 ```bash
-curl -X POST http://localhost:8787/api/entries \
+curl -X POST http://localhost:4321/api/entries \
   -H "content-type: application/json" \
   --data '{"message":"hello from curl"}'
 ```
@@ -97,7 +97,7 @@ Example admin delete:
 ```bash
 ENTRY_KEY='entry:2026-07-10T00:00:00.000Z:replace'
 ENCODED_KEY=$(node -e 'process.stdout.write(encodeURIComponent(process.argv[1]))' "$ENTRY_KEY")
-curl -X DELETE "http://localhost:8787/api/entries/$ENCODED_KEY" \
+curl -X DELETE "http://localhost:4321/api/entries/$ENCODED_KEY" \
   -H "Authorization: Bearer $ADMIN_TOKEN"
 ```
 
@@ -174,14 +174,23 @@ pnpm smoke http://localhost:4321        # a local `pnpm preview`
 It checks that `/` answers `200` over valid TLS with the guestbook HTML, and
 that the KV read path completed — `/` is a `prerender = false` route that
 returns `503` when the `GUESTBOOK` binding is missing, so a rendered entry list
-*or* the "No entries yet." message both count as a pass. It also checks that
+*or* the "No entries yet." message both count as a pass. It also issues a
+real browser-style navigation request (`sec-fetch-mode: navigate`) to `/`,
+which guards against the asset-layer 404 shadowing regression — a plain
+`fetch()` cannot send that header, since it is a forbidden header name, which
+is why the check uses `node:https` instead. It also checks that
 `GET /api/entries` returns `200` with a JSON entries array. An empty guestbook
 passes; the script never writes an entry, because a post-deploy check must not
 mutate production data.
 
-It exits `0` with a notice — rather than failing — while the domain is not
-reachable yet, matching the deploy job's own self-skip. A domain that *does*
-respond but returns the wrong status or content fails the job loudly.
+In CI, the deploy workflow sets `SMOKE_REQUIRE_LIVE: "1"` on the smoke step,
+so the run requires the site to be live and fails loudly if it is not — the KV
+namespace id is committed and the custom domain is attached and serving, so
+"not reachable" means an outage. The exit-`0` self-skip — reporting a notice
+rather than failing while the domain is not reachable yet — applies only to a
+local run, or a fork whose Cloudflare resources are not provisioned, where
+`SMOKE_REQUIRE_LIVE` is unset. A domain that *does* respond but returns the
+wrong status or content fails the job loudly either way.
 
 The KV namespace is provisioned and its id committed, so the deploy job runs and the site is live. `ADMIN_TOKEN` is a Worker secret set with `wrangler secret put`, not a GitHub secret; without it the admin delete route stays closed while the rest of the guestbook works.
 

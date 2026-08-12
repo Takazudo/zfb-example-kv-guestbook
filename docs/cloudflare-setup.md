@@ -183,9 +183,12 @@ and, because `wrangler.toml` sets `workers_dev = true`, also stays reachable at:
 <https://zfb-example-kv-guestbook.takazudo.workers.dev>
 
 The deploy job runs `pnpm smoke` immediately afterwards, which asserts the
-custom domain serves the guestbook and that the KV read path works. It exits
-`0` with a notice while the domain is not reachable yet, so a first deploy that
-lands before DNS propagates does not go red.
+custom domain serves the guestbook and that the KV read path works. The deploy
+step sets `SMOKE_REQUIRE_LIVE: "1"`, so this no longer self-skips: the KV id is
+committed and the domain is attached, so "not reachable" is treated as an
+outage and the job goes red. The exit-`0`-with-a-notice behavior only applies
+when `SMOKE_REQUIRE_LIVE` is unset — a local `pnpm smoke` run, or a fork whose
+Cloudflare resources are not yet provisioned.
 
 ## 6. Verify the deployment
 
@@ -196,10 +199,16 @@ production instead of `localhost:4321`.
 BASE=https://zfb-example-kv-guestbook.takazudomodular.com
 ```
 
-**The page renders** — expect `200` and the guestbook form in the HTML:
+**The page renders** — expect `200` and the guestbook form in the HTML. Send
+navigation headers, not a bare curl: Cloudflare's asset layer applies
+`not_found_handling` only to requests that look like a browser navigation, so
+a header-less curl can report a healthy `200` while every real browser gets
+the 404 page — this exact blind spot let the homepage-404 bug ship. `pnpm
+smoke` (`scripts/smoke.mjs`) runs this same navigation check automatically.
 
 ```bash
-curl -s -o /dev/null -w '%{http_code}\n' "$BASE/"
+curl -s -o /dev/null -w '%{http_code}\n' \
+  -H 'sec-fetch-mode: navigate' -H 'sec-fetch-dest: document' "$BASE/"
 ```
 
 **Reads work** — expect `{"ok":true,"entries":[...],...}`. A `503` here means
@@ -271,3 +280,19 @@ Treat it as a real failure only if the entry never shows up.
 **A `400` from `POST`.** The submission had no usable `message` field. The
 endpoint accepts JSON, form-encoded, or plain text bodies, but the message
 itself must be present and non-empty.
+
+**The homepage 404s in a browser but `curl` says `200`.** The site looks
+healthy to a plain `curl` and to the deploy logs, yet every human visitor
+lands on the 404 page. `pages/index.tsx` sets `prerender = false`, so the
+build emits no `dist/index.html`; the asset layer is consulted before the
+Worker and answers an unmatched path with `not_found_handling` — but only for
+**navigation** requests, which is why a header-less curl never reproduces it.
+The fix already in place is `run_worker_first = ["/", "/api/*"]` in
+`wrangler.toml`, which routes those two paths to the Worker first, while real
+files under `/assets/*` are still served directly by the asset layer.
+Reproduce or verify with the navigation curl from step 6:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' \
+  -H 'sec-fetch-mode: navigate' -H 'sec-fetch-dest: document' "$BASE/"
+```
