@@ -28,11 +28,12 @@ on:
 # types need opposite behavior and the fix has to live at the workflow level:
 # a job-level concurrency override on `deploy` can't help — a run-level cancel
 # takes the whole run (including the job) down with it, and job-level
-# `cancel-in-progress: false` is already the default anyway. For `push` (the
-# `deploy` job) this evaluates to false, so a second push to main queues
-# behind an in-flight `wrangler deploy` instead of cancelling it mid-flight.
-# For `pull_request` (the `build` job) it stays true, so superseded PR builds
-# are still cancelled as before.
+# `cancel-in-progress: false` is already the default anyway. This block scopes
+# the whole RUN, not a single job. On `push` it evaluates to false, so a run
+# already executing `wrangler deploy` is left alone and a second push to main
+# queues behind it instead of cancelling it mid-flight. On `pull_request` it
+# stays true, so superseded PR builds are still cancelled as before (only
+# `build` runs there — `deploy` is gated on `github.event_name == 'push'`).
 #
 # Accepted limitation: GitHub keeps at most one *pending* run per group and
 # cancels an older pending run when a newer one arrives. Two rapid pushes to
