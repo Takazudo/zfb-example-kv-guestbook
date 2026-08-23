@@ -18,6 +18,7 @@
  *   SMOKE_REQUIRE_LIVE=1 node scripts/smoke.mjs  # "not ready yet" becomes a failure
  */
 
+import { request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
 
 const DEFAULT_BASE_URL = "https://zfb-example-kv-guestbook.takazudomodular.com";
@@ -112,15 +113,17 @@ async function get(path) {
  * every real visitor gets the 404 page. This check exists because that exact
  * bug shipped and passed a fetch-based smoke test.
  *
- * node:https writes the headers verbatim, so it can reproduce a real navigation.
+ * node:http and node:https write the headers verbatim, so both local and live
+ * targets can reproduce a real navigation.
  */
 function navigationGet(path) {
   return new Promise((resolve, reject) => {
     const url = new URL(path, baseUrl);
-    const request = httpsRequest(
+    const requestForProtocol = url.protocol === "http:" ? httpRequest : httpsRequest;
+    const request = requestForProtocol(
       {
         hostname: url.hostname,
-        port: url.port || 443,
+        port: url.port || undefined,
         path: url.pathname + url.search,
         method: "GET",
         headers: {
