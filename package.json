@@ -18,11 +18,11 @@
     "preact-render-to-string": "^6.6.6"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20260710.1",
+    "@cloudflare/workers-types": "^5.20260828.1",
     "@types/node": "^22.0.0",
     "tailwindcss": "^4.2.0",
     "typescript": "^5.9.0",
-    "wrangler": "4.85.0"
+    "wrangler": "4.127.0"
   },
   "packageManager": "pnpm@10.34.1",
   "engines": {
