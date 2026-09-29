@@ -1,1 +1,14 @@
-@import "tailwindcss";
+/*
+ * Stylesheet entry for the prerendered pages (today: 404.html). The Worker-SSR
+ * home page does not link it — all page styling lives in the inline critical
+ * CSS in layouts/default.tsx. The zudo-wind reset (`wind.reset: "owned-v1"`)
+ * is emitted into this entry's `zw-reset` layer.
+ *
+ * Parity with the 2.x Tailwind preflight that owned-v1 does not carry
+ * (Takazudo/zudo-front-builder#3382); only what the computed-style diff showed.
+ */
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
