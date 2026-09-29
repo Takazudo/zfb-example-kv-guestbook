@@ -4,6 +4,30 @@ A compact zfb + Cloudflare Workers KV guestbook recipe. The homepage is a
 server-rendered `prerender = false` route with a plain HTML form, and the same
 KV helpers power JSON API endpoints.
 
+## How it's built
+
+- **zfb 3** (`@takazudo/zfb`, `@takazudo/zfb-runtime` and
+  `@takazudo/zfb-adapter-cloudflare`, pinned to the same exact version). Pages
+  are TSX compiled against zfb's owned JSX runtime,
+  `jsxImportSource: "@takazudo/zfb/zudo-react"`. There is no Preact or React
+  dependency.
+- **HTML spellings in JSX.** zudo-react uses the HTML attribute names:
+  `class`, `for`, `charset`, `datetime`, `maxlength`. The React-style
+  `className` / `charSet` / `dateTime` are rejected at render time.
+- **No client JavaScript.** The home page is Worker SSR with plain `<form>`
+  posts and 303 redirects, so it works identically with JavaScript disabled.
+  Page components return a `Response` for redirects and for the controlled
+  `503`/`405` cases.
+- **Styling is inline critical CSS.** `layouts/default.tsx` inlines it with
+  `<style rawHtml={CRITICAL_CSS} />`. zudo-react requires `rawHtml` for
+  `<style>` content; it is emitted verbatim, which is only safe because the
+  CSS is a trusted module constant. The Worker-SSR home page links no
+  stylesheet.
+- **zudo-wind reset.** `wind: { spec: 1, reset: "owned-v1" }` in
+  `zfb.config.ts` provides the base reset for the prerendered `404.html`. That
+  page is the only one linking `styles/global.css`. No utility classes are
+  used; every class is authored CSS.
+
 ## Local run
 
 ```bash
