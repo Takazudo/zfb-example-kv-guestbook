@@ -136,7 +136,7 @@ export default async function HomePage() {
                 <li class="entry" key={entry.key}>
                   <p>{entry.message}</p>
                   <div class="entry-meta">
-                    <time dateTime={entry.createdAt}>{formatDate(entry.createdAt)}</time>
+                    <time datetime={entry.createdAt}>{formatDate(entry.createdAt)}</time>
                     <code>{entry.key}</code>
                     <form class="entry-delete" method="post" action="/">
                       <input type="hidden" name="delete" value={entry.key} />

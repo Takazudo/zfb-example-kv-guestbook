@@ -1,9 +1,9 @@
 import { defineConfig } from "zfb/config";
 
 export default defineConfig({
-  framework: "preact",
   adapter: "@takazudo/zfb-adapter-cloudflare",
-  tailwind: {
-    enabled: true,
+  wind: {
+    spec: 1,
+    reset: "owned-v1",
   },
 });

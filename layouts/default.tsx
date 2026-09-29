@@ -1,4 +1,4 @@
-import type { ComponentChildren } from "preact";
+import type { Child } from "@takazudo/zfb/zudo-react";
 
 import "../styles/global.css";
 
@@ -247,17 +247,19 @@ code {
 
 type Props = {
   title?: string;
-  children: ComponentChildren;
+  children: Child;
 };
 
 export default function DefaultLayout({ title = "zfb KV guestbook", children }: Props) {
   return (
     <html lang="en">
       <head>
-        <meta charSet="utf-8" />
+        <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <title>{title}</title>
-        <style>{CRITICAL_CSS}</style>
+        {/* zudo-react requires raw-text <style> content via rawHtml. CRITICAL_CSS is a
+            trusted module constant — rawHtml is emitted verbatim and is not a sanitizer. */}
+        <style rawHtml={CRITICAL_CSS} />
       </head>
       <body>
         <div class="shell">
