@@ -78,6 +78,9 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Test local Worker and KV contracts
+        run: pnpm test:local
+
   deploy:
     name: Deploy to Cloudflare Workers
     needs: build
