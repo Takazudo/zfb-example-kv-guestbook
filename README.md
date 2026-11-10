@@ -6,11 +6,12 @@ KV helpers power JSON API endpoints.
 
 ## How it's built
 
-- **zfb 3** (`@takazudo/zfb`, `@takazudo/zfb-runtime` and
+- **zfb 6** (`@takazudo/zfb`, `@takazudo/zfb-runtime` and
   `@takazudo/zfb-adapter-cloudflare`, pinned to the same exact version). Pages
   are TSX compiled against zfb's owned JSX runtime,
   `jsxImportSource: "@takazudo/zfb/zudo-react"`. There is no Preact or React
-  dependency.
+  dependency. Install and build on Node.js 24 or newer; that is the engine
+  zfb 5+ declares.
 - **HTML spellings in JSX.** zudo-react uses the HTML attribute names:
   `class`, `for`, `charset`, `datetime`, `maxlength`. The React-style
   `className` / `charSet` / `dateTime` are rejected at render time.
@@ -31,6 +32,7 @@ KV helpers power JSON API endpoints.
 ## Local run
 
 ```bash
+# Node.js 24 or newer (zfb engines). pnpm 10, as in packageManager.
 pnpm install
 pnpm dev
 pnpm build
