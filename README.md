@@ -6,7 +6,7 @@ KV helpers power JSON API endpoints.
 
 ## How it's built
 
-- **zfb 6** (`@takazudo/zfb`, `@takazudo/zfb-runtime` and
+- **zfb 7** (`@takazudo/zfb`, `@takazudo/zfb-runtime` and
   `@takazudo/zfb-adapter-cloudflare`, pinned to the same exact version). Pages
   are TSX compiled against zfb's owned JSX runtime,
   `jsxImportSource: "@takazudo/zfb/zudo-react"`. There is no Preact or React
